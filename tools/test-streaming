@@ -1,48 +1,63 @@
 #!/bin/bash
 #
-# Verifies that xcbeautify streams output line-by-line even when
-# stdout is connected to a pipe (i.e. not a TTY). Lines fed slowly
-# through a FIFO must appear in the output file incrementally, not
-# batched at exit.
+# Verifies that xcbeautify flushes each output line immediately, even
+# when stdout is a pipe.
+#
+# Mechanism: xcbeautify reads from an input FIFO and writes to an output
+# FIFO. The test writes one line at a time, then attempts to read the
+# corresponding output line with a generous timeout. A read that
+# succeeds means the line was flushed; a timeout means it was stuck in
+# a buffer. This avoids sleep-based polling and the flakiness that
+# comes with it.
 
 set -euo pipefail
 
 BIN="${1:-.build/release/xcbeautify}"
 
-FIFO=$(mktemp -u)
-mkfifo "$FIFO"
-OUT=$(mktemp)
+IN_FIFO=$(mktemp -u)
+OUT_FIFO=$(mktemp -u)
+mkfifo "$IN_FIFO"
+mkfifo "$OUT_FIFO"
 
-cleanup() { rm -f "$FIFO" "$OUT"; }
+cleanup() { rm -f "$IN_FIFO" "$OUT_FIFO"; }
 trap cleanup EXIT
 
-# Start xcbeautify reading from the FIFO with output piped to a file.
-"$BIN" --disable-logging --preserve-unbeautified < "$FIFO" > "$OUT" &
-PID=$!
+# Start xcbeautify: reads from IN_FIFO, writes to OUT_FIFO.
+"$BIN" --disable-logging --preserve-unbeautified < "$IN_FIFO" > "$OUT_FIFO" &
+XCB_PID=$!
 
-# Keep the write end open for the duration of the test.
-exec 3>"$FIFO"
+# Open the write side of IN_FIFO (keeps it open across iterations).
+exec 3>"$IN_FIFO"
+
+# Open the read side of OUT_FIFO.
+exec 4<"$OUT_FIFO"
 
 PASS=true
 
 for i in 1 2 3; do
+    # Send one line.
     echo "Line $i of input" >&3
-    sleep 0.3
-    LINES=$(wc -l < "$OUT")
-    if [ "$LINES" -lt "$i" ]; then
-        echo "FAIL: After sending line $i, output has only $LINES lines (expected >= $i)"
+
+    # Read the corresponding output line. 5 s timeout is generous; a
+    # buffered implementation would not flush until the ~4 KB buffer
+    # fills or the process exits, so this would time out.
+    if read -t 5 -u 4 output_line; then
+        if [ "$output_line" != "Line $i of input" ]; then
+            echo "FAIL: Line $i content mismatch: got '$output_line'"
+            PASS=false
+        fi
+    else
+        echo "FAIL: Timed out waiting for line $i (output is buffered)"
         PASS=false
     fi
 done
 
+# Close the write side so xcbeautify sees EOF and exits.
 exec 3>&-
-wait "$PID" 2>/dev/null || true
+wait "$XCB_PID" 2>/dev/null || true
 
-FINAL=$(wc -l < "$OUT")
-if [ "$FINAL" -ne 3 ]; then
-    echo "FAIL: Expected 3 final output lines, got $FINAL"
-    PASS=false
-fi
+# Close the read side.
+exec 4<&-
 
 if [ "$PASS" = true ]; then
     echo "Streaming test passed."
