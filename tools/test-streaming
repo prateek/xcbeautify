@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# Verifies that xcbeautify streams output line-by-line even when
+# stdout is connected to a pipe (i.e. not a TTY). Lines fed slowly
+# through a FIFO must appear in the output file incrementally, not
+# batched at exit.
+
+set -euo pipefail
+
+BIN="${1:-.build/release/xcbeautify}"
+
+FIFO=$(mktemp -u)
+mkfifo "$FIFO"
+OUT=$(mktemp)
+
+cleanup() { rm -f "$FIFO" "$OUT"; }
+trap cleanup EXIT
+
+# Start xcbeautify reading from the FIFO with output piped to a file.
+"$BIN" --disable-logging --preserve-unbeautified < "$FIFO" > "$OUT" &
+PID=$!
+
+# Keep the write end open for the duration of the test.
+exec 3>"$FIFO"
+
+PASS=true
+
+for i in 1 2 3; do
+    echo "Line $i of input" >&3
+    sleep 0.3
+    LINES=$(wc -l < "$OUT")
+    if [ "$LINES" -lt "$i" ]; then
+        echo "FAIL: After sending line $i, output has only $LINES lines (expected >= $i)"
+        PASS=false
+    fi
+done
+
+exec 3>&-
+wait "$PID" 2>/dev/null || true
+
+FINAL=$(wc -l < "$OUT")
+if [ "$FINAL" -ne 3 ]; then
+    echo "FAIL: Expected 3 final output lines, got $FINAL"
+    PASS=false
+fi
+
+if [ "$PASS" = true ]; then
+    echo "Streaming test passed."
+else
+    echo "Streaming test FAILED."
+    exit 1
+fi
