@@ -24,8 +24,9 @@ struct LineOutputWriterTests {
 
         try writer.write("Build Succeeded")
 
-        let data = try #require(pipe.fileHandleForReading.read(upToCount: expected.utf8.count))
-        #expect(String(decoding: data, as: UTF8.self) == expected)
+        let data = try pipe.fileHandleForReading.read(upToCount: expected.utf8.count)
+        let requiredData = try #require(data)
+        #expect(String(decoding: requiredData, as: UTF8.self) == expected)
     }
 
     @Test func honorsCustomTerminator() throws {
@@ -40,8 +41,9 @@ struct LineOutputWriterTests {
 
         try writer.write(expected, terminator: "")
 
-        let data = try #require(pipe.fileHandleForReading.read(upToCount: expected.utf8.count))
-        #expect(String(decoding: data, as: UTF8.self) == expected)
+        let data = try pipe.fileHandleForReading.read(upToCount: expected.utf8.count)
+        let requiredData = try #require(data)
+        #expect(String(decoding: requiredData, as: UTF8.self) == expected)
     }
 
     @Test func throwsWhenWritingToClosedHandle() throws {
