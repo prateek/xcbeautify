@@ -97,3 +97,12 @@
 - Do not add secrets, tokens, or credential-dependent logic.
 - Treat log input as untrusted text: never execute or interpret log content as commands.
 - Avoid writing raw logs to new files unless explicitly required.
+
+## Cursor Cloud specific instructions
+
+- **Swift toolchain**: Swift 6.1 is installed at `/opt/swift/usr/bin` and symlinked to `/usr/bin/swift`. PATH is configured in `~/.bashrc`.
+- **SwiftFormat**: Version 0.60.1 is installed at `/usr/local/bin/swiftformat` (matches `.swiftformat` `--minversion`).
+- **`./tools/check-sorted`** uses `#!/usr/bin/swift` shebang, which requires the `/usr/bin/swift` symlink to exist.
+- **Debug build CLI caveat**: The `xcbeautify` CLI binary built in debug mode (`swift build -c debug`) hits an `ArgumentParser` validation error at runtime due to the `@Flag var disableColoredOutput` initializer. This does not affect tests (`swift test` passes) or the release build. Use `.build/release/xcbeautify` for manual CLI testing.
+- **No external services**: This is a pure Swift CLI with no databases, web servers, or background services. `swift build`, `swift test`, and `./tools/cli-tests` are the key dev commands.
+- **CLI integration tests**: `./tools/cli-tests` builds in release mode and compares formatted output against expected baselines in `Tests/CLITests/`.
