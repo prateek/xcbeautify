@@ -33,56 +33,54 @@ package final class OutputHandler {
         self.writer = writer
     }
 
-    package func outputs(_ type: OutputType, _ content: String?) -> [String] {
-        guard let content else { return [] }
+    package func consume(_ type: OutputType, _ content: String?, _ sink: (String) throws -> Void) rethrows {
+        guard let content else { return }
 
         if !quiet, !quieter {
-            return [content]
+            try sink(content)
+            return
         }
 
         switch type {
         case OutputType.warning:
-            if quieter { return [] }
+            if quieter { return }
             fallthrough
         case OutputType.error:
-            return flushLastIfNeeded(with: content)
+            try flushLastIfNeeded(with: content, sink)
         case OutputType.issue:
-            return [content]
+            try sink(content)
         case OutputType.result:
-            return [content]
+            try sink(content)
         case OutputType.testCaseFailure:
-            return flushLastIfNeeded(with: content)
+            try flushLastIfNeeded(with: content, sink)
         case OutputType.testCasePass, OutputType.testCaseSkip:
             if isCI {
-                return [content]
+                try sink(content)
             }
-            return []
         case OutputType.nonContextualError:
-            return [content]
+            try sink(content)
         case OutputType.test:
             if isCI {
                 lastFormatted = nil
-                return [content]
+                try sink(content)
+                return
             }
             fallthrough
         default:
             lastFormatted = content
-            return []
         }
     }
 
     package func write(_ type: OutputType, _ content: String?) {
-        for line in outputs(type, content) {
-            writer(line)
-        }
+        consume(type, content, writer)
     }
 
-    private func flushLastIfNeeded(with content: String) -> [String] {
+    private func flushLastIfNeeded(with content: String, _ sink: (String) throws -> Void) rethrows {
         if let last = lastFormatted {
             lastFormatted = nil
-            return [last, content]
+            try sink(last)
         }
 
-        return [content]
+        try sink(content)
     }
 }

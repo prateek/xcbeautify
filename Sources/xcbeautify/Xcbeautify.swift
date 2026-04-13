@@ -106,7 +106,7 @@ struct Xcbeautify: ParsableCommand {
                 junitReporter.add(captureGroup: captureGroup)
             }
 
-            for line in output.outputs(result.outputType, result.formatted) {
+            try output.consume(result.outputType, result.formatted) { line in
                 try stdout.write(line)
             }
         }
