@@ -65,12 +65,16 @@ struct Xcbeautify: ParsableCommand {
 
         defer {
             let diff = CFAbsoluteTimeGetCurrent() - start
-            stdout.write("Took \(diff) seconds")
+            do {
+                try stdout.write("Took \(diff) seconds")
+            } catch {
+                assertionFailure("Failed to write timing output: \(error)")
+            }
         }
         #endif
 
         if !disableLogging {
-            stdout.write(
+            try stdout.write(
                 """
 
                 ----- xcbeautify -----
@@ -81,7 +85,7 @@ struct Xcbeautify: ParsableCommand {
             )
         }
 
-        let output = OutputHandler(quiet: quiet, quieter: quieter, isCI: isCI) { stdout.write($0) }
+        let output = OutputHandler(quiet: quiet, quieter: quieter, isCI: isCI)
         let junitReporter = JUnitReporter()
 
         let xcbeautifier = XCBeautifier(
@@ -102,7 +106,9 @@ struct Xcbeautify: ParsableCommand {
                 junitReporter.add(captureGroup: captureGroup)
             }
 
-            output.write(result.outputType, result.formatted)
+            for line in output.outputs(result.outputType, result.formatted) {
+                try stdout.write(line)
+            }
         }
 
         if !report.isEmpty {

@@ -12,7 +12,7 @@ import Testing
 @testable import XcbeautifyLib
 
 struct LineOutputWriterTests {
-    @Test func writesToFileHandleWithoutWaitingForClose() {
+    @Test func writesToFileHandleWithoutWaitingForClose() throws {
         let pipe = Pipe()
         let writer = LineOutputWriter(fileHandle: pipe.fileHandleForWriting)
         let expected = "Build Succeeded\n"
@@ -22,13 +22,13 @@ struct LineOutputWriterTests {
             try? pipe.fileHandleForWriting.close()
         }
 
-        writer.write("Build Succeeded")
+        try writer.write("Build Succeeded")
 
-        let data = pipe.fileHandleForReading.readData(ofLength: expected.utf8.count)
+        let data = try #require(pipe.fileHandleForReading.read(upToCount: expected.utf8.count))
         #expect(String(decoding: data, as: UTF8.self) == expected)
     }
 
-    @Test func honorsCustomTerminator() {
+    @Test func honorsCustomTerminator() throws {
         let pipe = Pipe()
         let writer = LineOutputWriter(fileHandle: pipe.fileHandleForWriting)
         let expected = "Version: test"
@@ -38,9 +38,29 @@ struct LineOutputWriterTests {
             try? pipe.fileHandleForWriting.close()
         }
 
-        writer.write(expected, terminator: "")
+        try writer.write(expected, terminator: "")
 
-        let data = pipe.fileHandleForReading.readData(ofLength: expected.utf8.count)
+        let data = try #require(pipe.fileHandleForReading.read(upToCount: expected.utf8.count))
         #expect(String(decoding: data, as: UTF8.self) == expected)
+    }
+
+    @Test func throwsWhenWritingToClosedHandle() throws {
+        let pipe = Pipe()
+        let writer = LineOutputWriter(fileHandle: pipe.fileHandleForWriting)
+        var didThrow = false
+
+        defer {
+            try? pipe.fileHandleForReading.close()
+        }
+
+        try pipe.fileHandleForWriting.close()
+
+        do {
+            try writer.write("Build Succeeded")
+        } catch {
+            didThrow = true
+        }
+
+        #expect(didThrow)
     }
 }

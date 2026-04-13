@@ -26,56 +26,63 @@ package final class OutputHandler {
     /// Ref: https://github.com/cpisciotta/xcbeautify/pull/15
     private var lastFormatted: String?
 
-    package init(quiet: Bool, quieter: Bool, isCI: Bool = false, _ writer: @escaping (String) -> Void) {
+    package init(quiet: Bool, quieter: Bool, isCI: Bool = false, _ writer: @escaping (String) -> Void = { _ in }) {
         self.quiet = quiet
         self.quieter = quieter
         self.isCI = isCI
         self.writer = writer
     }
 
-    package func write(_ type: OutputType, _ content: String?) {
-        guard let content else { return }
+    package func outputs(_ type: OutputType, _ content: String?) -> [String] {
+        guard let content else { return [] }
 
         if !quiet, !quieter {
-            writer(content)
-            return
+            return [content]
         }
 
         switch type {
         case OutputType.warning:
-            if quieter { return }
+            if quieter { return [] }
             fallthrough
         case OutputType.error:
-            if let last = lastFormatted {
-                writer(last)
-                lastFormatted = nil
-            }
-            writer(content)
+            return flushLastIfNeeded(with: content)
         case OutputType.issue:
-            writer(content)
+            return [content]
         case OutputType.result:
-            writer(content)
+            return [content]
         case OutputType.testCaseFailure:
-            if let last = lastFormatted {
-                writer(last)
-                lastFormatted = nil
-            }
-            writer(content)
+            return flushLastIfNeeded(with: content)
         case OutputType.testCasePass, OutputType.testCaseSkip:
             if isCI {
-                writer(content)
+                return [content]
             }
+            return []
         case OutputType.nonContextualError:
-            writer(content)
+            return [content]
         case OutputType.test:
             if isCI {
-                writer(content)
                 lastFormatted = nil
-            } else {
-                fallthrough
+                return [content]
             }
+            fallthrough
         default:
             lastFormatted = content
+            return []
         }
+    }
+
+    package func write(_ type: OutputType, _ content: String?) {
+        for line in outputs(type, content) {
+            writer(line)
+        }
+    }
+
+    private func flushLastIfNeeded(with content: String) -> [String] {
+        if let last = lastFormatted {
+            lastFormatted = nil
+            return [last, content]
+        }
+
+        return [content]
     }
 }

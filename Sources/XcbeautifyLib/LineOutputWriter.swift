@@ -17,7 +17,7 @@ package struct LineOutputWriter {
         self.fileHandle = fileHandle
     }
 
-    package func write(_ content: String, terminator: String = "\n") {
-        fileHandle.write(Data((content + terminator).utf8))
+    package func write(_ content: String, terminator: String = "\n") throws {
+        try fileHandle.write(contentsOf: Data((content + terminator).utf8))
     }
 }
