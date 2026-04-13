@@ -7,7 +7,7 @@
 // See https://github.com/cpisciotta/xcbeautify/blob/main/LICENSE for license information
 //
 
-import Foundation
+package import Foundation
 
 /// Writes complete output lines directly to a `FileHandle`.
 package struct LineOutputWriter {
