@@ -11,6 +11,23 @@ import ArgumentParser
 import Foundation
 import XcbeautifyLib
 
+/// Writes a string followed by a newline directly to stdout, bypassing
+/// C stdio buffering so output is available to downstream consumers immediately.
+private func printLine(_ string: String) {
+    var text = string + "\n"
+    text.withUTF8 { buffer in
+        guard let base = buffer.baseAddress else { return }
+        var remaining = buffer.count
+        var offset = 0
+        while remaining > 0 {
+            let written = Foundation.write(STDOUT_FILENO, base + offset, remaining)
+            guard written >= 0 else { return }
+            remaining -= written
+            offset += written
+        }
+    }
+}
+
 @main
 struct Xcbeautify: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -68,7 +85,7 @@ struct Xcbeautify: ParsableCommand {
         #endif
 
         if !disableLogging {
-            print(
+            printLine(
                 """
 
                 ----- xcbeautify -----
@@ -79,7 +96,7 @@ struct Xcbeautify: ParsableCommand {
             )
         }
 
-        let output = OutputHandler(quiet: quiet, quieter: quieter, isCI: isCI) { print($0) }
+        let output = OutputHandler(quiet: quiet, quieter: quieter, isCI: isCI) { printLine($0) }
         let junitReporter = JUnitReporter()
 
         let xcbeautifier = XCBeautifier(
